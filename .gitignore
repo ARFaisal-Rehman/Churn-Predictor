@@ -1,0 +1,7 @@
+data.csv
+uploads/
+artifacts/
+__pycache__/
+*.pyc
+venv/
+.vercel/

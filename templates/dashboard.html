@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Risk Radar - Churn Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container dashboard-container">
+        <header>
+            <div class="logo">
+                <i class="ph-bold ph-radar"></i>
+                <h1>Risk Radar</h1>
+                <span class="tagline">INTELLIGENCE</span>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="{{ url_for('main.dashboard') }}" class="active"><i class="ph ph-chart-bar"></i> Dashboard</a></li>
+                    <li><a href="{{ url_for('main.analytics') }}"><i class="ph ph-presentation-chart"></i> Analytics</a></li>
+                    <li><button id="retrainBtn" class="btn btn-sm btn-secondary"><i class="ph ph-arrows-counter-clockwise"></i> Retrain</button></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <div class="summary-stats-grid">
+                <div class="card stat-card">
+                    <div class="stat-label">Total Customers</div>
+                    <div class="stat-value">{{ analysis.summary.total_customers }}</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-label">Average Churn Risk</div>
+                    <div class="stat-value">{{ analysis.summary.average_risk }}%</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-label">High Risk Customers</div>
+                    <div class="stat-value text-danger">{{ analysis.summary.high_risk }}</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-label">Revenue at High Risk</div>
+                    <div class="stat-value text-danger">${{ "{:,.2f}".format(analysis.summary.estimated_revenue_at_risk) }}</div>
+                </div>
+            </div>
+
+            <div class="masonry-grid">
+                <!-- Risk Distribution -->
+                <div class="card chart-card">
+                    <h3>Risk Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="riskBandsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Top Churn Factors -->
+                <div class="card chart-card">
+                    <h3>Top Churn Factors</h3>
+                    <div class="chart-container">
+                        <canvas id="topReasonsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Model Performance -->
+                <div class="card chart-card">
+                    <h3>Model: {{ analysis.model.best_model|replace('_', ' ')|title }}</h3>
+                    <div class="model-metrics">
+                        <div class="metric-row">
+                            <span>ROC AUC Score</span>
+                            <span class="metric-val">{{ analysis.model.metrics[analysis.model.best_model].roc_auc }}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>F1 Score</span>
+                            <span class="metric-val">{{ analysis.model.metrics[analysis.model.best_model].f1 }}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Accuracy</span>
+                            <span class="metric-val">{{ analysis.model.metrics[analysis.model.best_model].accuracy }}</span>
+                        </div>
+                    </div>
+                    <div class="chart-container mt-md">
+                        <canvas id="importanceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- High Risk Customers Table -->
+                <div class="card customer-table-card">
+                    <div class="card-header-flex">
+                        <h3>High Risk Action List</h3>
+                        <a href="{{ url_for('main.analytics') }}" class="btn btn-secondary btn-sm">View All Customers</a>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Customer ID</th>
+                                    <th>Risk Score</th>
+                                    <th>Segment</th>
+                                    <th>Revenue</th>
+                                    <th>Recency</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for customer in analysis.top_customers %}
+                                <tr>
+                                    <td><a href="{{ url_for('main.customer_profile', customer_id=customer.customer_id) }}">#{{ customer.customer_id }}</a></td>
+                                    <td>
+                                        <span class="risk-badge {{ customer.risk_category|lower }}">
+                                            {{ (customer.churn_probability * 100)|round(1) }}%
+                                        </span>
+                                    </td>
+                                    <td>{{ customer.segment_name }}</td>
+                                    <td>${{ "{:,.2f}".format(customer.total_revenue) }}</td>
+                                    <td>{{ customer.recency_days }}d</td>
+                                    <td><span class="action-text">{{ customer.recommended_action }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2024 Risk Radar &bull; Last Generated: {{ analysis.generated_at }}</p>
+        </footer>
+    </div>
+
+    <template id="analysis-data">{{ analysis|tojson|safe }}</template>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const analysis = JSON.parse(document.getElementById('analysis-data').textContent);
+            
+            // Risk Bands Chart
+            new Chart(document.getElementById('riskBandsChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: analysis.charts.risk_bands.labels,
+                    datasets: [{
+                        data: analysis.charts.risk_bands.values,
+                        backgroundColor: ['#ff6b6b', '#ffd166', '#06d6a0'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // Top Reasons Chart
+            new Chart(document.getElementById('topReasonsChart'), {
+                type: 'bar',
+                data: {
+                    labels: analysis.charts.top_reasons.labels,
+                    datasets: [{
+                        label: 'Customers Affected',
+                        data: analysis.charts.top_reasons.values,
+                        backgroundColor: '#3a86ff',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // Feature Importance
+            new Chart(document.getElementById('importanceChart'), {
+                type: 'bar',
+                data: {
+                    labels: analysis.charts.feature_importance.labels.slice(0, 6),
+                    datasets: [{
+                        label: 'Importance',
+                        data: analysis.charts.feature_importance.values.slice(0, 6),
+                        backgroundColor: '#ffd166',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        title: { display: true, text: 'Key Churn Predictors' }
+                    }
+                }
+            });
+
+            // Retrain Button
+            document.getElementById('retrainBtn').addEventListener('click', function() {
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Training...';
+                
+                fetch('/api/retrain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force_retrain: true })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ok) {
+                        window.location.reload();
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Training failed. Check console.');
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-sync"></i> Retrain Model';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

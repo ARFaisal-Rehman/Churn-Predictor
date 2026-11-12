@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Risk Radar - Advanced Analytics</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="ph-bold ph-radar"></i>
+                <h1>Risk Radar</h1>
+                <span class="tagline">INTELLIGENCE</span>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="{{ url_for('main.dashboard') }}"><i class="ph ph-chart-bar"></i> Dashboard</a></li>
+                    <li><a href="{{ url_for('main.analytics') }}" class="active"><i class="ph ph-presentation-chart"></i> Analytics</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <div class="card">
+                <h3>Customer Segmentation</h3>
+                <div class="segmentation-layout">
+                    <div class="chart-container-large">
+                        <canvas id="pcaScatterChart"></canvas>
+                    </div>
+                    <div class="segment-details">
+                        {% for segment in analysis.segments %}
+                        <div class="segment-card-small">
+                            <div class="segment-name-badge {{ segment.segment_name|lower|replace(' ', '-') }}">
+                                {{ segment.segment_name }}
+                            </div>
+                            <div class="segment-stats-mini">
+                                <div><strong>{{ segment.customers }}</strong> customers</div>
+                                <div><strong>{{ (segment.avg_risk * 100)|round(1) }}%</strong> avg risk</div>
+                                <div><strong>${{ "{:,.0f}".format(segment.avg_revenue) }}</strong> avg rev</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="masonry-grid">
+                <!-- Revenue at Risk -->
+                <div class="card chart-card">
+                    <h3>Revenue Exposure by Risk Band</h3>
+                    <div class="chart-container">
+                        <canvas id="revenueRiskChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recency vs Risk -->
+                <div class="card chart-card">
+                    <h3>Risk vs. Days Since Last Order</h3>
+                    <div class="chart-container">
+                        <canvas id="recencyRiskChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Full Customer Table -->
+            <div class="card">
+                <div class="card-header-flex">
+                    <h3>Full Customer Analysis</h3>
+                    <div class="table-actions">
+                        <input type="text" id="tableSearch" placeholder="Search customer ID..." class="input-sm">
+                    </div>
+                </div>
+                <div class="table-container-large">
+                    <table id="customerTable">
+                        <thead>
+                            <tr>
+                                <th>Customer ID</th>
+                                <th>Risk Score</th>
+                                <th>Category</th>
+                                <th>Segment</th>
+                                <th>Revenue</th>
+                                <th>Recency</th>
+                                <th>Orders</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in analysis.customers %}
+                            <tr>
+                                <td><a href="{{ url_for('main.customer_profile', customer_id=customer.customer_id) }}">#{{ customer.customer_id }}</a></td>
+                                <td>{{ (customer.churn_probability * 100)|round(1) }}%</td>
+                                <td><span class="risk-badge {{ customer.risk_category|lower }}">{{ customer.risk_category }}</span></td>
+                                <td>{{ customer.segment_name }}</td>
+                                <td>${{ "{:,.2f}".format(customer.total_revenue) }}</td>
+                                <td>{{ customer.recency_days }}d</td>
+                                <td>{{ customer.order_count }}</td>
+                                <td><span class="action-text">{{ customer.recommended_action }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2024 Risk Radar &bull; Dataset: {{ analysis.dataset.path.split('\\')[-1] }}</p>
+        </footer>
+    </div>
+
+    <template id="analysis-data">{{ analysis|tojson|safe }}</template>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const analysis = JSON.parse(document.getElementById('analysis-data').textContent);
+            
+            // PCA Scatter Chart
+            const ctxPCA = document.getElementById('pcaScatterChart').getContext('2d');
+            const segmentColors = {
+                'At Risk': '#ff6b6b',
+                'Watchlist': '#ffd166',
+                'Core': '#06d6a0'
+            };
+
+            new Chart(ctxPCA, {
+                type: 'scatter',
+                data: {
+                    datasets: Object.keys(segmentColors).map(segName => ({
+                        label: segName,
+                        data: analysis.charts.segment_pca
+                            .filter(p => p.segment === segName)
+                            .map(p => ({x: p.x, y: p.y})),
+                        backgroundColor: segmentColors[segName],
+                        pointRadius: 4
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: 'Customer Segments (PCA Visualization)' }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: { display: false }
+                    }
+                }
+            });
+
+            // Revenue by Risk Chart
+            new Chart(document.getElementById('revenueRiskChart'), {
+                type: 'bar',
+                data: {
+                    labels: analysis.charts.revenue_by_risk.labels,
+                    datasets: [{
+                        label: 'Revenue',
+                        data: analysis.charts.revenue_by_risk.values,
+                        backgroundColor: ['#ff6b6b', '#ffd166', '#06d6a0']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // Recency vs Risk Chart
+            new Chart(document.getElementById('recencyRiskChart'), {
+                type: 'line',
+                data: {
+                    labels: analysis.charts.recency_vs_risk.labels,
+                    datasets: [{
+                        label: 'Average Risk (%)',
+                        data: analysis.charts.recency_vs_risk.values,
+                        borderColor: '#3a86ff',
+                        backgroundColor: 'rgba(58, 134, 255, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    }
+                }
+            });
+
+            // Simple Table Search
+            document.getElementById('tableSearch').addEventListener('keyup', function() {
+                const term = this.value.toLowerCase();
+                const rows = document.querySelectorAll('#customerTable tbody tr');
+                rows.forEach(row => {
+                    const id = row.cells[0].textContent.toLowerCase();
+                    row.style.display = id.includes(term) ? '' : 'none';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

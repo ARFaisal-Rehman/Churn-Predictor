@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Profile #{{ customer.customer_id }} | Risk Radar</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="ph-bold ph-radar"></i>
+                <h1>Risk Radar</h1>
+                <span class="tagline">INTELLIGENCE</span>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="{{ url_for('main.dashboard') }}"><i class="ph ph-chart-bar"></i> Dashboard</a></li>
+                    <li><a href="{{ url_for('main.analytics') }}"><i class="ph ph-presentation-chart"></i> Analytics</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main class="profile-main">
+            <div class="back-link">
+                <a href="{{ url_for('main.dashboard') }}"><i class="ph ph-arrow-left"></i> Back to Dashboard</a>
+            </div>
+
+            <div class="profile-header">
+                <h2>Customer Profile Analysis</h2>
+                <div class="customer-id">
+                    <span class="label">ID:</span>
+                    <span class="value">#{{ customer.customer_id }}</span>
+                </div>
+            </div>
+
+            <div class="profile-content">
+                <!-- Churn Risk Card -->
+                <div class="card churn-risk-card">
+                    <h3>Churn Risk Assessment</h3>
+                    <div class="risk-meter">
+                        <div class="risk-gauge">
+                            <div class="gauge-container">
+                                <canvas id="gaugeChart"></canvas>
+                                <div class="gauge-percentage">{{ (customer.churn_probability * 100)|round(1) }}%</div>
+                            </div>
+                        </div>
+                        <div class="risk-level {{ customer.risk_category|lower }}-risk">
+                            <span class="risk-label">Risk Level</span>
+                            <span class="risk-value">{{ customer.risk_category }}</span>
+                        </div>
+                    </div>
+
+                    <div class="risk-factors">
+                        <h4>Top Risk Indicators</h4>
+                        <ul class="factors-list">
+                            {% for reason in customer.top_reasons %}
+                                <li>
+                                    <span class="factor-icon"><i class="ph ph-warning-circle"></i></span>
+                                    <span class="factor-text">{{ reason }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Retention Strategy Card -->
+                <div class="card retention-card">
+                    <h3>Recommended Action</h3>
+                    <div class="offer-container {{ customer.risk_category|lower }}-risk">
+                        <div class="offer-icon">
+                            <i class="ph ph-lightbulb"></i>
+                        </div>
+                        <div class="offer-details">
+                            <h4>{{ customer.risk_category }} Priority Strategy</h4>
+                            <p>{{ customer.recommended_action }}</p>
+                        </div>
+                    </div>
+
+                    <div class="segment-info mt-md">
+                        <h4>Customer Segment</h4>
+                        <div class="segment-badge {{ customer.segment_name|lower|replace(' ', '-') }}-segment">
+                            {{ customer.segment_name }}
+                        </div>
+                        <p class="segment-description">
+                            {% if customer.segment_name == 'Core' %}
+                                This is a high-value loyal customer. Focus on retention and cross-sell.
+                            {% elif customer.segment_name == 'Watchlist' %}
+                                Showing early signs of disengagement. Proactive nurture is required.
+                            {% else %}
+                                Critical risk of churn. Immediate intervention recommended.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Behavioral Metrics -->
+                <div class="card customer-info-card">
+                    <h3>Behavioral Metrics</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Total Lifetime Revenue</span>
+                            <span class="info-value">${{ "{:,.2f}".format(customer.total_revenue) }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Total Order Count</span>
+                            <span class="info-value">{{ customer.order_count }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Avg Order Value</span>
+                            <span class="info-value">${{ "{:,.2f}".format(customer.avg_order_value) }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Days Since Last Order</span>
+                            <span class="info-value">{{ customer.recency_days }} days</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Total Customer Tenure</span>
+                            <span class="info-value">{{ customer.tenure_days }} days</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Distinct Products</span>
+                            <span class="info-value">{{ customer.unique_products }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Engagement Score</span>
+                            <span class="info-value">{{ customer.engagement_score|round(2) }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Monetary Score</span>
+                            <span class="info-value">{{ customer.monetary_score|round(2) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historical Context -->
+                <div class="card history-card">
+                    <h3>Engagement Timeline</h3>
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-date">Current Snapshot</div>
+                            <div class="timeline-content">
+                                <h4>Risk Status: {{ customer.risk_category }}</h4>
+                                <p>Engagement score is {{ customer.engagement_score|round(2) }} based on recent activity patterns.</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">{{ customer.recency_days }} days ago</div>
+                            <div class="timeline-content">
+                                <h4>Last Purchase Activity</h4>
+                                <p>Customer's most recent interaction with the storefront.</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">{{ customer.tenure_days }} days ago</div>
+                            <div class="timeline-content">
+                                <h4>Customer Acquisition</h4>
+                                <p>First recorded transaction in the system.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2024 Risk Radar &bull; Generated: {{ customer.snapshot_date }}</p>
+        </footer>
+    </div>
+
+    <template id="customer-data">{{ customer|tojson|safe }}</template>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const customer = JSON.parse(document.getElementById('customer-data').textContent);
+            const churnProb = Math.round(customer.churn_probability * 100);
+            
+            const riskColors = {
+                'high': '#ff6b6b',
+                'medium': '#ffd166',
+                'low': '#06d6a0'
+            };
+
+            const ctx = document.getElementById('gaugeChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [churnProb, 100 - churnProb],
+                        backgroundColor: [riskColors[customer.risk_category.toLowerCase()], '#f8f9fa'],
+                        borderWidth: 0,
+                        cutout: '80%'
+                    }]
+                },
+                options: {
+                    rotation: -90,
+                    circumference: 180,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
