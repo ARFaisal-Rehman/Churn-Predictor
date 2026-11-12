@@ -1,210 +1,59 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Customer Profile #{{ customer.customer_id }} | Risk Radar</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <div class="logo">
-                <i class="ph-bold ph-radar"></i>
-                <h1>Risk Radar</h1>
-                <span class="tagline">INTELLIGENCE</span>
-            </div>
-            <nav>
-                <ul>
-                    <li><a href="{{ url_for('main.dashboard') }}"><i class="ph ph-chart-bar"></i> Dashboard</a></li>
-                    <li><a href="{{ url_for('main.analytics') }}"><i class="ph ph-presentation-chart"></i> Analytics</a></li>
-                </ul>
-            </nav>
-        </header>
+{% extends 'base.html' %}
+{% block title %}Customer #{{ customer.customer_id }}{% endblock %}
+{% set band = customer.risk_category|lower %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <div class="eyebrow"><a href="{{ url_for('main.customers') }}">Customers</a> / #{{ customer.customer_id }}</div>
+    <h1>Customer #{{ customer.customer_id }}</h1>
+    <p>{{ customer.segment_name }} · scored on {{ customer.snapshot_date }} for the next {{ analysis.dataset.prediction_window_days }} days</p>
+  </div>
+</section>
 
-        <main class="profile-main">
-            <div class="back-link">
-                <a href="{{ url_for('main.dashboard') }}"><i class="ph ph-arrow-left"></i> Back to Dashboard</a>
-            </div>
-
-            <div class="profile-header">
-                <h2>Customer Profile Analysis</h2>
-                <div class="customer-id">
-                    <span class="label">ID:</span>
-                    <span class="value">#{{ customer.customer_id }}</span>
-                </div>
-            </div>
-
-            <div class="profile-content">
-                <!-- Churn Risk Card -->
-                <div class="card churn-risk-card">
-                    <h3>Churn Risk Assessment</h3>
-                    <div class="risk-meter">
-                        <div class="risk-gauge">
-                            <div class="gauge-container">
-                                <canvas id="gaugeChart"></canvas>
-                                <div class="gauge-percentage">{{ (customer.churn_probability * 100)|round(1) }}%</div>
-                            </div>
-                        </div>
-                        <div class="risk-level {{ customer.risk_category|lower }}-risk">
-                            <span class="risk-label">Risk Level</span>
-                            <span class="risk-value">{{ customer.risk_category }}</span>
-                        </div>
-                    </div>
-
-                    <div class="risk-factors">
-                        <h4>Top Risk Indicators</h4>
-                        <ul class="factors-list">
-                            {% for reason in customer.top_reasons %}
-                                <li>
-                                    <span class="factor-icon"><i class="ph ph-warning-circle"></i></span>
-                                    <span class="factor-text">{{ reason }}</span>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Retention Strategy Card -->
-                <div class="card retention-card">
-                    <h3>Recommended Action</h3>
-                    <div class="offer-container {{ customer.risk_category|lower }}-risk">
-                        <div class="offer-icon">
-                            <i class="ph ph-lightbulb"></i>
-                        </div>
-                        <div class="offer-details">
-                            <h4>{{ customer.risk_category }} Priority Strategy</h4>
-                            <p>{{ customer.recommended_action }}</p>
-                        </div>
-                    </div>
-
-                    <div class="segment-info mt-md">
-                        <h4>Customer Segment</h4>
-                        <div class="segment-badge {{ customer.segment_name|lower|replace(' ', '-') }}-segment">
-                            {{ customer.segment_name }}
-                        </div>
-                        <p class="segment-description">
-                            {% if customer.segment_name == 'Core' %}
-                                This is a high-value loyal customer. Focus on retention and cross-sell.
-                            {% elif customer.segment_name == 'Watchlist' %}
-                                Showing early signs of disengagement. Proactive nurture is required.
-                            {% else %}
-                                Critical risk of churn. Immediate intervention recommended.
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Behavioral Metrics -->
-                <div class="card customer-info-card">
-                    <h3>Behavioral Metrics</h3>
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <span class="info-label">Total Lifetime Revenue</span>
-                            <span class="info-value">${{ "{:,.2f}".format(customer.total_revenue) }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Total Order Count</span>
-                            <span class="info-value">{{ customer.order_count }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Avg Order Value</span>
-                            <span class="info-value">${{ "{:,.2f}".format(customer.avg_order_value) }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Days Since Last Order</span>
-                            <span class="info-value">{{ customer.recency_days }} days</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Total Customer Tenure</span>
-                            <span class="info-value">{{ customer.tenure_days }} days</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Distinct Products</span>
-                            <span class="info-value">{{ customer.unique_products }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Engagement Score</span>
-                            <span class="info-value">{{ customer.engagement_score|round(2) }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Monetary Score</span>
-                            <span class="info-value">{{ customer.monetary_score|round(2) }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Historical Context -->
-                <div class="card history-card">
-                    <h3>Engagement Timeline</h3>
-                    <div class="timeline">
-                        <div class="timeline-item">
-                            <div class="timeline-date">Current Snapshot</div>
-                            <div class="timeline-content">
-                                <h4>Risk Status: {{ customer.risk_category }}</h4>
-                                <p>Engagement score is {{ customer.engagement_score|round(2) }} based on recent activity patterns.</p>
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="timeline-date">{{ customer.recency_days }} days ago</div>
-                            <div class="timeline-content">
-                                <h4>Last Purchase Activity</h4>
-                                <p>Customer's most recent interaction with the storefront.</p>
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="timeline-date">{{ customer.tenure_days }} days ago</div>
-                            <div class="timeline-content">
-                                <h4>Customer Acquisition</h4>
-                                <p>First recorded transaction in the system.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <footer>
-            <p>&copy; 2024 Risk Radar &bull; Generated: {{ customer.snapshot_date }}</p>
-        </footer>
+<section class="grid two">
+  <div class="card" aria-labelledby="risk-h">
+    <div class="card-head"><h2 id="risk-h">Churn risk</h2><span class="badge {{ band }}">{{ customer.risk_category }} risk</span></div>
+    <div class="kpi"><div class="value">{{ "{:.0%}".format(customer.churn_probability) }}</div>
+      <div class="sub">chance of no purchase in the next {{ analysis.dataset.prediction_window_days }} days (calibrated)</div></div>
+    <div class="meter" role="img" aria-label="Risk {{ '{:.0%}'.format(customer.churn_probability) }}">
+      <span style="width: {{ (customer.churn_probability * 100)|round(1) }}%; background: var(--{{ band }})"></span>
     </div>
+    <p class="note">Base rate in the test period: {{ "{:.0%}".format(analysis.model.evaluation.base_rate) }}. Spend at risk: <strong class="mono">£{{ "{:,.0f}".format(customer.churn_probability * customer.value_per_window) }}</strong> (risk × typical 60-day spend of £{{ "{:,.0f}".format(customer.value_per_window) }}).</p>
+    <h3 style="margin-top:16px">Suggested action</h3>
+    <p class="callout" style="margin-top:8px">{{ customer.recommended_action }}</p>
+    <p class="note" style="margin-top:8px">Playbook rule based on risk band, segment and the signals below, not a model output.</p>
+  </div>
 
-    <template id="customer-data">{{ customer|tojson|safe }}</template>
+  <div class="card" aria-labelledby="why-h">
+    <div class="card-head"><h2 id="why-h">What is driving the risk</h2><p>Points added vs a typical customer</p></div>
+    {% if customer.top_reasons %}
+      {% for r in customer.top_reasons %}
+      <div class="reason">
+        <span class="what">{{ r.label }}</span>
+        <span class="impact">+{{ r.impact }} pts</span>
+        <span class="detail">This customer: <span class="mono">{{ r.value }}</span> · typical: <span class="mono">{{ r.typical }}</span></span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="note">No single signal raises this customer's risk by more than half a point over a typical customer.</p>
+    {% endif %}
+    <p class="note" style="margin-top:12px">Each signal is measured by resetting that one feature to the typical (median) value and re-scoring. Related features share credit, so treat these as signals to check, not proven causes.</p>
+  </div>
+</section>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const customer = JSON.parse(document.getElementById('customer-data').textContent);
-            const churnProb = Math.round(customer.churn_probability * 100);
-            
-            const riskColors = {
-                'high': '#ff6b6b',
-                'medium': '#ffd166',
-                'low': '#06d6a0'
-            };
-
-            const ctx = document.getElementById('gaugeChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    datasets: [{
-                        data: [churnProb, 100 - churnProb],
-                        backgroundColor: [riskColors[customer.risk_category.toLowerCase()], '#f8f9fa'],
-                        borderWidth: 0,
-                        cutout: '80%'
-                    }]
-                },
-                options: {
-                    rotation: -90,
-                    circumference: 180,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { enabled: false } }
-                }
-            });
-        });
-    </script>
-</body>
-</html>
+<section class="card" aria-labelledby="facts-h">
+  <div class="card-head"><h2 id="facts-h">Purchase history, last 12 months</h2></div>
+  <dl class="facts">
+    <div><dt>Spend</dt><dd>£{{ "{:,.0f}".format(customer.total_revenue) }}</dd></div>
+    <div><dt>Orders</dt><dd>{{ customer.order_count|int }}</dd></div>
+    <div><dt>Average order value</dt><dd>£{{ "{:,.0f}".format(customer.avg_order_value) }}</dd></div>
+    <div><dt>Days since last order</dt><dd>{{ "{:,.0f}".format(customer.recency_days) }}</dd></div>
+    <div><dt>Average days between orders</dt><dd>{{ "{:,.0f}".format(customer.avg_days_between_orders) if customer.avg_days_between_orders is not none else "one order only" }}</dd></div>
+    <div><dt>Orders in last 90 days</dt><dd>{{ customer.orders_last_90d|int }}</dd></div>
+    <div><dt>Spend in last 90 days</dt><dd>£{{ "{:,.0f}".format(customer.revenue_last_90d) }}</dd></div>
+    <div><dt>Distinct products</dt><dd>{{ customer.unique_products|int }}</dd></div>
+    <div><dt>Returns</dt><dd>{{ customer.return_count|int }} ({{ "{:.0%}".format(customer.return_value_ratio or 0) }} of spend)</dd></div>
+    <div><dt>Days since first order</dt><dd>{{ "{:,.0f}".format(customer.tenure_days) }}</dd></div>
+  </dl>
+</section>
+{% endblock %}

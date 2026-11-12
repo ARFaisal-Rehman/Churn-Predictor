@@ -1,7 +1,10 @@
+data/
 data.csv
 uploads/
 artifacts/
 __pycache__/
 *.pyc
 venv/
+.venv/
 .vercel/
+.pytest_cache/

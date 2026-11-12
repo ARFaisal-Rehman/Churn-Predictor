@@ -1,227 +1,247 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Risk Radar - Churn Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div class="container dashboard-container">
-        <header>
-            <div class="logo">
-                <i class="ph-bold ph-radar"></i>
-                <h1>Risk Radar</h1>
-                <span class="tagline">INTELLIGENCE</span>
-            </div>
-            <nav>
-                <ul>
-                    <li><a href="{{ url_for('main.dashboard') }}" class="active"><i class="ph ph-chart-bar"></i> Dashboard</a></li>
-                    <li><a href="{{ url_for('main.analytics') }}"><i class="ph ph-presentation-chart"></i> Analytics</a></li>
-                    <li><button id="retrainBtn" class="btn btn-sm btn-secondary"><i class="ph ph-arrows-counter-clockwise"></i> Retrain</button></li>
-                </ul>
-            </nav>
-        </header>
+{% extends 'base.html' %}
+{% block title %}Overview{% endblock %}
+{% set ev = analysis.model.evaluation %}
+{% set best = analysis.model.results[analysis.model.best_model] %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <div class="eyebrow">Scoring snapshot {{ analysis.dataset.snapshots.scoring }} · next {{ analysis.dataset.prediction_window_days }} days</div>
+    <h1>Who is likely to stop buying, and is it worth acting?</h1>
+    <p>{{ "{:,}".format(analysis.summary.customers_scored) }} customers who bought in the last year, scored by a calibrated model that was chosen with time-ordered validation and tested on a later period it never saw.</p>
+  </div>
+  <a class="btn ghost" href="{{ url_for('main.methodology') }}">How this works</a>
+</section>
 
-        <main>
-            <div class="summary-stats-grid">
-                <div class="card stat-card">
-                    <div class="stat-label">Total Customers</div>
-                    <div class="stat-value">{{ analysis.summary.total_customers }}</div>
-                </div>
-                <div class="card stat-card">
-                    <div class="stat-label">Average Churn Risk</div>
-                    <div class="stat-value">{{ analysis.summary.average_risk }}%</div>
-                </div>
-                <div class="card stat-card">
-                    <div class="stat-label">High Risk Customers</div>
-                    <div class="stat-value text-danger">{{ analysis.summary.high_risk }}</div>
-                </div>
-                <div class="card stat-card">
-                    <div class="stat-label">Revenue at High Risk</div>
-                    <div class="stat-value text-danger">${{ "{:,.2f}".format(analysis.summary.estimated_revenue_at_risk) }}</div>
-                </div>
-            </div>
+<section class="grid kpis" aria-label="Key figures">
+  <div class="card kpi">
+    <div class="label">Expected to churn</div>
+    <div class="value">{{ "{:,.0f}".format(analysis.summary.expected_churners) }}</div>
+    <div class="sub">of {{ "{:,}".format(analysis.summary.customers_scored) }} · mean risk {{ "{:.0%}".format(analysis.summary.average_risk) }}</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">High risk (≥ 65%)</div>
+    <div class="value">{{ "{:,}".format(analysis.summary.high_risk) }}</div>
+    <div class="sub">{{ "{:,}".format(analysis.summary.medium_risk) }} medium · {{ "{:,}".format(analysis.summary.low_risk) }} low</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">Expected spend at risk</div>
+    {% set loss = analysis.summary.expected_revenue_loss %}
+    <div class="value">{% if loss >= 1000000 %}£{{ "%.2f"|format(loss / 1000000) }}M{% else %}£{{ "{:,.0f}".format(loss / 1000) }}k{% endif %}</div>
+    <div class="sub">Σ risk × each customer's typical 60-day spend</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">Out-of-time ROC-AUC</div>
+    <div class="value">{{ "%.3f"|format(ev.roc_auc) }}</div>
+    <div class="sub">{{ analysis.model.best_model|replace('_', ' ')|title }} · test snapshot {{ analysis.dataset.snapshots.test }}</div>
+  </div>
+</section>
 
-            <div class="masonry-grid">
-                <!-- Risk Distribution -->
-                <div class="card chart-card">
-                    <h3>Risk Distribution</h3>
-                    <div class="chart-container">
-                        <canvas id="riskBandsChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Top Churn Factors -->
-                <div class="card chart-card">
-                    <h3>Top Churn Factors</h3>
-                    <div class="chart-container">
-                        <canvas id="topReasonsChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Model Performance -->
-                <div class="card chart-card">
-                    <h3>Model: {{ analysis.model.best_model|replace('_', ' ')|title }}</h3>
-                    <div class="model-metrics">
-                        <div class="metric-row">
-                            <span>ROC AUC Score</span>
-                            <span class="metric-val">{{ analysis.model.metrics[analysis.model.best_model].roc_auc }}</span>
-                        </div>
-                        <div class="metric-row">
-                            <span>F1 Score</span>
-                            <span class="metric-val">{{ analysis.model.metrics[analysis.model.best_model].f1 }}</span>
-                        </div>
-                        <div class="metric-row">
-                            <span>Accuracy</span>
-                            <span class="metric-val">{{ analysis.model.metrics[analysis.model.best_model].accuracy }}</span>
-                        </div>
-                    </div>
-                    <div class="chart-container mt-md">
-                        <canvas id="importanceChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- High Risk Customers Table -->
-                <div class="card customer-table-card">
-                    <div class="card-header-flex">
-                        <h3>High Risk Action List</h3>
-                        <a href="{{ url_for('main.analytics') }}" class="btn btn-secondary btn-sm">View All Customers</a>
-                    </div>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Customer ID</th>
-                                    <th>Risk Score</th>
-                                    <th>Segment</th>
-                                    <th>Revenue</th>
-                                    <th>Recency</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for customer in analysis.top_customers %}
-                                <tr>
-                                    <td><a href="{{ url_for('main.customer_profile', customer_id=customer.customer_id) }}">#{{ customer.customer_id }}</a></td>
-                                    <td>
-                                        <span class="risk-badge {{ customer.risk_category|lower }}">
-                                            {{ (customer.churn_probability * 100)|round(1) }}%
-                                        </span>
-                                    </td>
-                                    <td>{{ customer.segment_name }}</td>
-                                    <td>${{ "{:,.2f}".format(customer.total_revenue) }}</td>
-                                    <td>{{ customer.recency_days }}d</td>
-                                    <td><span class="action-text">{{ customer.recommended_action }}</span></td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <footer>
-            <p>&copy; 2024 Risk Radar &bull; Last Generated: {{ analysis.generated_at }}</p>
-        </footer>
+<section class="card" aria-labelledby="profit-h">
+  <div class="card-head">
+    <div>
+      <h2 id="profit-h">Who should we contact?</h2>
+      <p>Ranking by risk alone wastes budget on high-risk customers who spend little. Ranking by expected value (risk × typical spend) finds the peak sooner. The three inputs are assumptions; change them.</p>
     </div>
+  </div>
+  <div class="profit-layout">
+    <div class="grid" style="align-content:start">
+      <div class="slider">
+        <label for="cost">Cost per contact <output id="cost-out">£5</output></label>
+        <input id="cost" type="range" min="0" max="50" step="1" value="5">
+      </div>
+      <div class="slider">
+        <label for="save">Chance a contact keeps a churner <output id="save-out">15%</output></label>
+        <input id="save" type="range" min="1" max="60" step="1" value="15">
+      </div>
+      <div class="slider">
+        <label for="margin">Gross margin on saved spend <output id="margin-out">30%</output></label>
+        <input id="margin" type="range" min="5" max="80" step="1" value="30">
+      </div>
+      <p class="callout">Expected profit of contacting customer <em>i</em> = risk<sub>i</sub> × save rate × margin × typical 60-day spend<sub>i</sub> − cost. The save rate is a guess here; measuring it needs a controlled campaign.</p>
+    </div>
+    <div>
+      <div class="result-row">
+        <div class="kpi"><div class="label">Contact</div><div class="value" id="best-k">–</div><div class="sub" id="best-share">customers</div></div>
+        <div class="kpi"><div class="label">Value cut-off</div><div class="value" id="best-p">–</div><div class="sub">contact if risk × spend ≥ this</div></div>
+        <div class="kpi"><div class="label">Expected profit</div><div class="value" id="best-profit">–</div><div class="sub" id="best-vs">vs contacting everyone</div></div>
+      </div>
+      <div class="chart tall"><canvas id="profitChart" aria-label="Expected profit by number of customers contacted" role="img"></canvas></div>
+    </div>
+  </div>
+</section>
 
-    <template id="analysis-data">{{ analysis|tojson|safe }}</template>
+<section class="grid two">
+  <div class="card" aria-labelledby="quality-h">
+    <div class="card-head">
+      <h2 id="quality-h">Model quality on the held-out period</h2>
+      <p>{{ "{:,}".format(ev.n) }} customers · churn rate {{ "{:.0%}".format(ev.base_rate) }}</p>
+    </div>
+    <div class="table-wrap">
+      <table class="metric-table">
+        <tbody>
+          <tr><td>ROC-AUC, out-of-time (calibrated)</td><td class="num">{{ "%.3f"|format(ev.roc_auc) }}</td></tr>
+          <tr><td>ROC-AUC, random split inside one snapshot</td><td class="num">{{ "%.3f"|format(ev.random_split_roc_auc) }}</td></tr>
+          <tr><td>Forward-chaining CV ROC-AUC (selection metric)</td><td class="num">{{ "%.3f"|format(best.forward_cv_roc_auc) }} ± {{ "%.3f"|format(best.forward_cv_roc_auc_std) }}</td></tr>
+          <tr><td>PR-AUC</td><td class="num">{{ "%.3f"|format(ev.pr_auc) }}</td></tr>
+          <tr><td>Brier score: calibrated / raw / base rate</td><td class="num">{{ "%.3f"|format(ev.brier_calibrated) }} / {{ "%.3f"|format(ev.brier_uncalibrated) }} / {{ "%.3f"|format(ev.brier_base_rate) }}</td></tr>
+          <tr><td>Precision in top 10% by risk</td><td class="num">{{ "{:.1%}".format(ev.precision_top_decile) }} (lift {{ ev.lift_top_decile }}×)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card" aria-labelledby="rel-h">
+    <div class="card-head">
+      <h2 id="rel-h">Are the probabilities honest?</h2>
+      <p>Points on the diagonal mean "70% risk" really churns 70% of the time.</p>
+    </div>
+    <div class="chart"><canvas id="relChart" role="img" aria-label="Reliability diagram: predicted vs observed churn rate, before and after calibration"></canvas></div>
+  </div>
+</section>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const analysis = JSON.parse(document.getElementById('analysis-data').textContent);
-            
-            // Risk Bands Chart
-            new Chart(document.getElementById('riskBandsChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: analysis.charts.risk_bands.labels,
-                    datasets: [{
-                        data: analysis.charts.risk_bands.values,
-                        backgroundColor: ['#ff6b6b', '#ffd166', '#06d6a0'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'bottom' }
-                    }
-                }
-            });
+<section class="grid two">
+  <div class="card">
+    <div class="card-head"><h2>Risk distribution</h2><p>Bands: low &lt; 35%, medium 35–65%, high ≥ 65%</p></div>
+    <div class="chart"><canvas id="histChart" role="img" aria-label="Histogram of churn risk"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Most common risk signals</h2><p>Top three signals per medium/high-risk customer</p></div>
+    <div class="chart"><canvas id="reasonChart" role="img" aria-label="Most common risk signals"></canvas></div>
+  </div>
+</section>
 
-            // Top Reasons Chart
-            new Chart(document.getElementById('topReasonsChart'), {
-                type: 'bar',
-                data: {
-                    labels: analysis.charts.top_reasons.labels,
-                    datasets: [{
-                        label: 'Customers Affected',
-                        data: analysis.charts.top_reasons.values,
-                        backgroundColor: '#3a86ff',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } }
-                }
-            });
+<section class="card" aria-labelledby="seg-h">
+  <div class="card-head">
+    <h2 id="seg-h">Customer segments</h2>
+    <p>K-means on log-scaled recency, orders, spend and order value; k = {{ analysis.segments.k }} chosen by silhouette ({{ "%.3f"|format(analysis.segments.silhouette[analysis.segments.k|string]) }})</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Segment</th><th class="num">Customers</th><th class="num">Mean risk</th><th class="num">Median days since order</th><th class="num">Median orders</th><th class="num">Median spend</th><th class="num">Total spend</th></tr></thead>
+      <tbody>
+      {% for s in analysis.segments.summary %}
+        <tr>
+          <td><a href="{{ url_for('main.customers', segment=s.segment_name) }}">{{ s.segment_name }}</a></td>
+          <td class="num">{{ "{:,}".format(s.customers) }}</td>
+          <td class="num">{{ "{:.0%}".format(s.avg_risk) }}</td>
+          <td class="num">{{ "{:,.0f}".format(s.median_recency) }}</td>
+          <td class="num">{{ "{:,.0f}".format(s.median_orders) }}</td>
+          <td class="num">£{{ "{:,.0f}".format(s.median_spend) }}</td>
+          <td class="num">£{{ "{:,.0f}".format(s.spend_total) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 
-            // Feature Importance
-            new Chart(document.getElementById('importanceChart'), {
-                type: 'bar',
-                data: {
-                    labels: analysis.charts.feature_importance.labels.slice(0, 6),
-                    datasets: [{
-                        label: 'Importance',
-                        data: analysis.charts.feature_importance.values.slice(0, 6),
-                        backgroundColor: '#ffd166',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { display: false },
-                        title: { display: true, text: 'Key Churn Predictors' }
-                    }
-                }
-            });
+<section class="card" aria-labelledby="pri-h">
+  <div class="card-head">
+    <h2 id="pri-h">Priority list: most spend at risk</h2>
+    <a href="{{ url_for('main.customers', risk='High') }}">All high-risk customers</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Customer</th><th>Risk</th><th class="num">Spend at risk (60d)</th><th>Segment</th><th class="num">Days since order</th><th>Suggested action</th></tr></thead>
+      <tbody id="priority"></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
 
-            // Retrain Button
-            document.getElementById('retrainBtn').addEventListener('click', function() {
-                this.disabled = true;
-                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Training...';
-                
-                fetch('/api/retrain', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ force_retrain: true })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.ok) {
-                        window.location.reload();
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    alert('Training failed. Check console.');
-                    this.disabled = false;
-                    this.innerHTML = '<i class="fas fa-sync"></i> Retrain Model';
-                });
-            });
-        });
-    </script>
-</body>
-</html>
+{% block scripts %}
+<script>
+const A = {{ {'customers': analysis.customers, 'evaluation': ev, 'hist': analysis.charts.risk_histogram, 'reasons': analysis.charts.top_reasons}|tojson }};
+const profileUrl = id => "{{ url_for('main.customer_profile', customer_id='__ID__') }}".replace('__ID__', id);
+const charts = {};
+
+function priorityTable() {
+  const rows = [...A.customers].map(c => ({...c, atRisk: c.churn_probability * c.value_per_window}))
+    .sort((a, b) => b.atRisk - a.atRisk).slice(0, 10);
+  document.getElementById('priority').innerHTML = rows.map(c => `
+    <tr><td><a href="${profileUrl(c.customer_id)}">#${c.customer_id}</a></td>
+    <td><span class="badge ${c.risk_category.toLowerCase()}">${c.risk_category} · ${Math.round(c.churn_probability * 100)}%</span></td>
+    <td class="num">${GBP.format(c.atRisk)}</td><td>${c.segment_name}</td>
+    <td class="num">${Math.round(c.recency_days)}</td><td>${c.recommended_action}</td></tr>`).join('');
+}
+
+const byRisk = [...A.customers].sort((a, b) => b.churn_probability - a.churn_probability);
+const byValue = [...A.customers].sort((a, b) => b.churn_probability * b.value_per_window - a.churn_probability * a.value_per_window);
+function curve(order, save, margin, cost) {
+  let cum = 0, best = {k: 0, v: 0, c: null};
+  const pts = [{x: 0, y: 0}];
+  order.forEach((c, i) => {
+    cum += c.churn_probability * save * margin * c.value_per_window - cost;
+    if (cum > best.v) best = {k: i + 1, v: cum, c};
+    if ((i + 1) % 20 === 0 || i === order.length - 1) pts.push({x: i + 1, y: Math.round(cum)});
+  });
+  return {pts, best, all: cum};
+}
+function profit() {
+  const cost = +document.getElementById('cost').value;
+  const save = +document.getElementById('save').value / 100;
+  const margin = +document.getElementById('margin').value / 100;
+  document.getElementById('cost-out').textContent = '£' + cost;
+  document.getElementById('save-out').textContent = Math.round(save * 100) + '%';
+  document.getElementById('margin-out').textContent = Math.round(margin * 100) + '%';
+  const v = curve(byValue, save, margin, cost), r = curve(byRisk, save, margin, cost);
+  const b = v.best;
+  document.getElementById('best-k').textContent = b.k.toLocaleString('en-GB');
+  document.getElementById('best-share').textContent = b.k ? `customers (${Math.round(b.k / byValue.length * 100)}% of base)` : 'nobody: costs exceed expected gains';
+  document.getElementById('best-p').textContent = b.c ? GBP.format(b.c.churn_probability * b.c.value_per_window) : '–';
+  document.getElementById('best-profit').textContent = GBP.format(b.v);
+  document.getElementById('best-vs').textContent = `best by risk alone: ${GBP.format(r.best.v)}`;
+  return {v, r};
+}
+
+function draw() {
+  if (!window.Chart) return;
+  Object.values(charts).forEach(c => c.destroy());
+  const fg = cssVar('--muted'), grid = cssVar('--grid'), primary = cssVar('--primary'), accent = cssVar('--accent');
+  Chart.defaults.color = fg; Chart.defaults.font.family = "'Fira Sans', system-ui, sans-serif"; Chart.defaults.borderColor = grid;
+  const pr = profit();
+  charts.profit = new Chart(document.getElementById('profitChart'), {
+    type: 'line',
+    data: {datasets: [
+      {label: 'Ranked by expected value (risk × spend)', data: pr.v.pts, borderColor: primary, borderWidth: 2, pointRadius: 0, tension: 0.15},
+      {label: 'Ranked by risk only', data: pr.r.pts, borderColor: accent, borderWidth: 2, borderDash: [6, 4], pointRadius: 0, tension: 0.15}]},
+    options: {maintainAspectRatio: false, animation: false, interaction: {mode: 'nearest', axis: 'x', intersect: false},
+      plugins: {legend: {position: 'bottom'}, tooltip: {callbacks: {title: t => `Contact top ${t[0].parsed.x}`, label: t => `${t.dataset.label}: ${GBP.format(t.parsed.y)}`}}},
+      scales: {x: {type: 'linear', title: {display: true, text: 'Customers contacted, in ranking order'}},
+               y: {title: {display: true, text: 'Expected profit'}, ticks: {callback: v => GBP.format(v)}}}}
+  });
+  const rel = A.evaluation.reliability;
+  charts.rel = new Chart(document.getElementById('relChart'), {
+    type: 'line',
+    data: {datasets: [
+      {label: 'Perfect calibration', data: [{x: 0, y: 0}, {x: 1, y: 1}], borderColor: fg, borderDash: [4, 4], borderWidth: 1, pointRadius: 0},
+      {label: 'Before calibration', data: rel.uncalibrated.predicted.map((p, i) => ({x: p, y: rel.uncalibrated.observed[i]})), borderColor: accent, backgroundColor: accent, borderDash: [6, 3], pointStyle: 'triangle', pointRadius: 4},
+      {label: 'After calibration', data: rel.calibrated.predicted.map((p, i) => ({x: p, y: rel.calibrated.observed[i]})), borderColor: primary, backgroundColor: primary, pointRadius: 4}]},
+    options: {maintainAspectRatio: false, animation: false, plugins: {legend: {position: 'bottom', labels: {usePointStyle: true}}},
+      scales: {x: {type: 'linear', min: 0, max: 1, title: {display: true, text: 'Predicted churn probability'}, ticks: {callback: v => Math.round(v * 100) + '%'}},
+               y: {min: 0, max: 1, title: {display: true, text: 'Observed churn rate'}, ticks: {callback: v => Math.round(v * 100) + '%'}}}}
+  });
+  const bandColor = i => i < 7 ? cssVar('--low') : i < 13 ? cssVar('--medium') : cssVar('--high');
+  charts.hist = new Chart(document.getElementById('histChart'), {
+    type: 'bar',
+    data: {labels: A.hist.map((_, i) => `${i * 5}–${i * 5 + 5}%`), datasets: [{label: 'Customers', data: A.hist, backgroundColor: A.hist.map((_, i) => bandColor(i)), borderRadius: 2}]},
+    options: {maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}},
+      scales: {x: {title: {display: true, text: 'Churn risk'}, ticks: {maxRotation: 0, autoSkip: true, maxTicksLimit: 6}}, y: {title: {display: true, text: 'Customers'}}}}
+  });
+  charts.reasons = new Chart(document.getElementById('reasonChart'), {
+    type: 'bar',
+    data: {labels: A.reasons.labels, datasets: [{label: 'Customers', data: A.reasons.values, backgroundColor: primary, borderRadius: 2}]},
+    options: {indexAxis: 'y', maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}}, scales: {x: {title: {display: true, text: 'Customers'}}}}
+  });
+}
+
+function updateProfit() {
+  const pr = profit();
+  if (charts.profit) { charts.profit.data.datasets[0].data = pr.v.pts; charts.profit.data.datasets[1].data = pr.r.pts; charts.profit.update('none'); }
+}
+['cost', 'save', 'margin'].forEach(id => document.getElementById(id).addEventListener('input', updateProfit));
+document.addEventListener('themechange', draw);
+priorityTable();
+profit();
+window.addEventListener('load', draw);
+</script>
+{% endblock %}
