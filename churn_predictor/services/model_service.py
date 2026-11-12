@@ -88,7 +88,7 @@ class ChurnModelService:
                 subsample=0.8,
                 colsample_bytree=0.8,
                 random_state=self.random_state,
-                use_label_encoder=False,
+                
                 eval_metric="logloss",
                 n_jobs=-1,
             )
