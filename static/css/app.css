@@ -60,12 +60,14 @@ p { margin: 0; }
 .brand { display: flex; align-items: center; gap: var(--s2); color: var(--fg); text-decoration: none;
   font-family: var(--mono); font-weight: 600; }
 .brand svg { color: var(--primary); }
-.topbar nav { display: flex; gap: var(--s1); flex: 1; }
+.topbar nav { display: flex; gap: var(--s1); flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.topbar nav::-webkit-scrollbar { display: none; }
+.topbar nav a { white-space: nowrap; flex-shrink: 0; }
 .topbar nav a { color: var(--muted); text-decoration: none; padding: 8px 12px; border-radius: 6px; font-weight: 500;
   min-height: 40px; display: inline-flex; align-items: center; transition: background .2s, color .2s; }
 .topbar nav a:hover { background: var(--primary-soft); color: var(--fg); }
 .topbar nav a[aria-current="page"] { color: var(--primary); background: var(--primary-soft); }
-.theme-toggle { width: 40px; height: 40px; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+.theme-toggle { flex-shrink: 0; width: 40px; height: 40px; border: 1px solid var(--line); background: var(--card); color: var(--fg);
   border-radius: 8px; cursor: pointer; display: grid; place-items: center; }
 .theme-toggle:hover { border-color: var(--line-strong); }
 .page { max-width: 1320px; margin: 0 auto; padding: var(--s5); display: grid; gap: var(--s5); }
